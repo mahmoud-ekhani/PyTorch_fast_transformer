@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+
 class TokenEmbedding(nn.Module):
     def __init__(self, vocab_size: int, embed_dim: int):
         """
@@ -27,6 +28,7 @@ class TokenEmbedding(nn.Module):
         """
         return self.embed(token_ids)
     
+
 class PositionalEncoding(nn.Module):
     def __init__(self, max_seq_len: int, embed_model_dim: int):
         """
@@ -72,6 +74,7 @@ class PositionalEncoding(nn.Module):
 
         return x
     
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, embed_dim=512, n_heads=8):
         """
@@ -182,6 +185,44 @@ class TransformerBlock(nn.Module):
 
         return norm2_out
 
+
+class TransformerEncoder(nn.Module):
+    def __init__(self, seq_len: int, vocab_size: int, embed_dim: int, num_layers: int = 6, expansion_factor: int = 4, n_heads: int = 8):
+        """
+        Args:
+            seq_len: Length of the input sequence.
+            vocab_size: Size of the vocabulary.
+            embed_dim: Dimension of the embedding.
+            num_layers: Number of Transformer encoder layers.
+            expansion_factor: Factor determining the intermediate size of the feed-forward layer in the Transformer block.
+            n_heads: Number of attention heads in multi-head attention.
+        """
+        super(TransformerEncoder, self).__init__()
+        self.embedding_layer = TokenEmbedding(vocab_size, embed_dim)
+        self.positional_encoder = PositionalEncoding(seq_len, embed_dim)
+
+        self.layers = nn.ModuleList([
+            TransformerBlock(embed_dim, expansion_factor, n_heads)
+            for _ in range(num_layers)
+        ])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Transformer Encoder consisting multiple Transformer blocks.
+
+        Args:
+            x: Input sequence. Shape: [batch_size, seq_len]
+
+        Returns:
+            Encoded output. Shape: [batch_size, seq_len, embed_dim]
+        """
+        embed_out = self.embedding_layer(x) # Shape: [batch_size, seq_len, embed_dim]
+        out = self.positional_encoder(embed_out) # Shape: [batch_size, seq_len, embed_dim]
+
+        for layer in self.layers:
+            out = layer(out, out, out) # Shape: [batch_size, seq_len, embed_dim]
+
+        return out
 
     
 
