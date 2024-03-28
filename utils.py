@@ -72,6 +72,68 @@ class PositionalEncoding(nn.Module):
 
         return x
     
+class MultiHeadAttention(nn.Module):
+    def __init__(self, embed_dim=512, n_heads=8):
+        """
+        Args:
+            embed_dim: Dimension of embedding vector output.
+            n_heads: Number of self-attention heads.
+
+        The embedding dimension should be divisible by the number of heads.
+        """
+        super(MultiHeadAttention, self).__init__()
+        self.embed_dim = embed_dim
+        self.n_heads = n_heads
+        self.single_head_dim = embed_dim // n_heads # Dimension per head (e.g., 512 / 8 = 64)
+
+        # Linear transformation for queries, keys, and values
+        self.query_matrix = nn.Linear(self.single_head_dim, self.single_head_dim, bias=False)
+        self.key_matrix = nn.Linear(self.single_head_dim, self.single_head_dim, bias=False)
+        self.value_matrix = nn.Linear(self.single_head_dim, self.single_head_dim, bias=False)
+
+        # Output linear layer
+        self.out = nn.Linear(self.n_heads * self.single_head_dim, self.embed_dim)
+
+    def forward(self, key: torch.Tensor, query: torch.Tensor, value: torch.Tensor, mask=None) -> torch.Tensor:
+        """
+        Forward pass of the MultiHeadAttention layer.
+        
+        Args:
+            key, query, value: Tensors of shape [batch_size, seq_length, embed_dim]
+            mask: Optional mask for the decoder. Shape: [batch_size, 1, seq_length_query, seq_length]
+
+        Returns:
+            Output of the multi-head attention. Shape: [batch_size, seq_length_query, embed_dim]
+        """
+        batch_size = key.size(0)
+        seq_length = key.size(1)
+        seq_length_query = query.size(1)
+
+        # Reshape and linearly transform queries, keys, and values
+        key = self.key_matrix(key.view(batch_size, seq_length, self.n_heads, self.single_head_dim))
+        query = self.query_matrix(query.view(batch_size, seq_length_query, self.n_heads, self.single_head_dim))
+        value = self.value_matrix(value.view(batch_size, seq_length, self.n_heads, self.single_head_dim))
+
+        # Transpose to get dimensions [batch_size, n_heads, seq_length, single_head_dim]
+        key, query, value = [x.transpose(1, 2) for x in (key, query, value)]
+
+        # Scaled Dot-Product Attention
+        k_adjusted = key.transpose(-1, -2) # Shape: [batch_size, n_heads, single_head_dim, seq_length]
+        product = torch.matmul(query, k_adjusted) / math.sqrt(self.single_head_dim) # Shape: [batch_size, n_heads, seq_length_query, seq_length]
+
+        # Masking for decoder
+        if mask is not None:
+            product = product.masked_fill(mask == 0, float("-1e20"))
+
+        scores = F.softmax(product, dim=-1)
+        attention = torch.matmul(scores, value) # Shape: [batch_size, n_heads, seq_length_query, signle_head_dim]
+
+        # Concatenate the heads and pass through the final lineaer layer
+        concat = attention.transpose(1, 2).contiguous().view(batch_size, seq_length_query, -1)
+        output = self.out(concat) # Shape: [batch_size, seq_length_query, embed_dim]
+        
+        return output
+    
 
 
 
