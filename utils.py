@@ -143,7 +143,7 @@ class TransformerBlock(nn.Module):
         """
         Args:
             embed_dim: Dimension of the embedding vectors.
-            expansion_factor: Factor determining the output dimension of the first linear layer in the feed-forward network.
+            expansion_factor: Factor determining the intermediate dimension in the feed-forward network.
             n_heads: Number of attention heads in the multi-head self-attention module.
         """
         super(TransformerBlock, self).__init__()
@@ -167,15 +167,15 @@ class TransformerBlock(nn.Module):
         Forward pass of the Transformer Block with multi-head self-attention and a feed-forwad network.
 
         Args:
-            key: Key tensor. Shape: [batch_size, seq_length, embed_dim]
-            query: Query tensor. Shape: [batch_size, seq_length_query, embed_dim]
-            value: Value tensor. Shape: [batch_size, seq_length, embed_dim]
-            mask: Optional mask for the decoder. Shape: [batch_size, 1, seq_length_query, seq_length]
+            key: Key tensor. Shape: [batch_size, seq_len, embed_dim]
+            query: Query tensor. Shape: [batch_size, seq_len_query, embed_dim]
+            value: Value tensor. Shape: [batch_size, seq_len, embed_dim]
+            mask: Optional mask for the decoder. Shape: [batch_size, 1, seq_len_query, seq_len]
 
         Returns:
-            Output after processing through the Transformer block. Shape: [batch_size, seq_length_query, embed_dim]
+            Output after processing through the Transformer block. Shape: [batch_size, seq_len_query, embed_dim]
         """
-        attention_out = self.attention(key, query, value, mask) # Shape: [batch_size, seq_length_query, embed_dim]
+        attention_out = self.attention(key, query, value, mask) # Shape: [batch_size, seq_len_query, embed_dim]
         attention_residual_out = attention_out + query
         norm1_out = self.dropout1(self.norm1(attention_residual_out))
 
