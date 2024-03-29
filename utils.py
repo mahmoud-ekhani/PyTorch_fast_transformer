@@ -102,38 +102,38 @@ class MultiHeadAttention(nn.Module):
         Forward pass of the MultiHeadAttention layer.
         
         Args:
-            key, query, value: Tensors of shape [batch_size, seq_length, embed_dim]
-            mask: Optional mask for the decoder. Shape: [batch_size, 1, seq_length_query, seq_length]
+            key, query, value: Tensors of shape [batch_size, seq_len, embed_dim]
+            mask: Optional mask for the decoder. Shape: [batch_size, 1, seq_len_query, seq_len]
 
         Returns:
-            Output of the multi-head attention. Shape: [batch_size, seq_length_query, embed_dim]
+            Output of the multi-head attention. Shape: [batch_size, seq_len_query, embed_dim]
         """
         batch_size = key.size(0)
-        seq_length = key.size(1)
-        seq_length_query = query.size(1)
+        seq_len = key.size(1)
+        seq_len_query = query.size(1)
 
-        # Reshape and linearly transform queries, keys, and values
-        key = self.key_matrix(key.view(batch_size, seq_length, self.n_heads, self.single_head_dim))
-        query = self.query_matrix(query.view(batch_size, seq_length_query, self.n_heads, self.single_head_dim))
-        value = self.value_matrix(value.view(batch_size, seq_length, self.n_heads, self.single_head_dim))
+        # Reshape and linearly transform keys, queries, and values
+        key = self.key_matrix(key.view(batch_size, seq_len, self.n_heads, self.single_head_dim))
+        query = self.query_matrix(query.view(batch_size, seq_len_query, self.n_heads, self.single_head_dim))
+        value = self.value_matrix(value.view(batch_size, seq_len, self.n_heads, self.single_head_dim))
 
-        # Transpose to get dimensions [batch_size, n_heads, seq_length, single_head_dim]
+        # Transpose to get dimensions [batch_size, n_heads, seq_len, single_head_dim]
         key, query, value = [x.transpose(1, 2) for x in (key, query, value)]
 
         # Scaled Dot-Product Attention
-        k_adjusted = key.transpose(-1, -2) # Shape: [batch_size, n_heads, single_head_dim, seq_length]
-        product = torch.matmul(query, k_adjusted) / math.sqrt(self.single_head_dim) # Shape: [batch_size, n_heads, seq_length_query, seq_length]
+        k_adjusted = key.transpose(-1, -2) # Shape: [batch_size, n_heads, single_head_dim, seq_len]
+        product = torch.matmul(query, k_adjusted) / math.sqrt(self.single_head_dim) # Shape: [batch_size, n_heads, seq_len_query, seq_len]
 
         # Masking for decoder
         if mask is not None:
             product = product.masked_fill(mask == 0, float("-1e20"))
 
         scores = F.softmax(product, dim=-1)
-        attention = torch.matmul(scores, value) # Shape: [batch_size, n_heads, seq_length_query, signle_head_dim]
+        attention = torch.matmul(scores, value) # Shape: [batch_size, n_heads, seq_len_query, signle_head_dim]
 
         # Concatenate the heads and pass through the final lineaer layer
-        concat = attention.transpose(1, 2).contiguous().view(batch_size, seq_length_query, -1)
-        output = self.out(concat) # Shape: [batch_size, seq_length_query, embed_dim]
+        concat = attention.transpose(1, 2).contiguous().view(batch_size, seq_len_query, -1) # Shape: [batch_size, seq_len_query, n_heads * single_head_dim]
+        output = self.out(concat) # Shape: [batch_size, seq_len_query, embed_dim]
         
         return output
 
@@ -224,7 +224,39 @@ class TransformerEncoder(nn.Module):
 
         return out
 
+
+class DecoderBlock(nn.Module):
+    def __init__(self, embed_dim: int, expansion_factor: int = 4, n_heads: int = 8):
+        """
+        Args:
+            embed_dim: Dimension of the embedding.
+            expansion_factor: Determines the intermediate dimension in the feed-forwad network.
+            n_heads: Number of attention heads in the multi-head self-attention.
+        """
+        super(DecoderBlock, self).__init__()
+
+        # Masked multi-head self-attention mechanism
+        self.self_attention = MultiHeadAttention(embed_dim, n_heads)
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.dropout1 = nn.Dropout(0.2)
+
+        # Encoder-decoder attention
+        self.enc_dec_attention = TransformerBlock(embed_dim, expansion_factor, n_heads)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.dropout2 = nn.Dropout(0.2)
+
+    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Decoder Block.
+
+        Args:
+            x: Input tensor from previous decoder layer. Shape: [batch_size, tgt_seq_len, embed_dim]
+            enc_out: Output tensor from the encoder. Shape: [batch_size, src_seq_len, embed_dim]
+            src_mask: Source mask tensor. Shape: [batch_size, 1, 1, src_seq_length]
+            tgt_mask: Target mask tensor. Shape: [batch_size, 1, tgt_seq_length, tgt_seq_length]
+
+        Returns:
+
+        """
+
     
-
-
-
