@@ -240,23 +240,28 @@ class DecoderBlock(nn.Module):
         self.norm1 = nn.LayerNorm(embed_dim)
         self.dropout1 = nn.Dropout(0.2)
 
-        # Encoder-decoder attention
+        # Encoder-decoder attention + feed-forward network
         self.enc_dec_attention = TransformerBlock(embed_dim, expansion_factor, n_heads)
-        self.norm2 = nn.LayerNorm(embed_dim)
-        self.dropout2 = nn.Dropout(0.2)
+       
 
-    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the Decoder Block.
 
         Args:
             x: Input tensor from previous decoder layer. Shape: [batch_size, tgt_seq_len, embed_dim]
             enc_out: Output tensor from the encoder. Shape: [batch_size, src_seq_len, embed_dim]
-            src_mask: Source mask tensor. Shape: [batch_size, 1, 1, src_seq_length]
             tgt_mask: Target mask tensor. Shape: [batch_size, 1, tgt_seq_length, tgt_seq_length]
 
         Returns:
-
+            Output tensor. Shape: [batch_size, tgt_seq_length, embed_dim]
         """
 
+        # Masked self-attention
+        self_attn_out = self.self_attention(x, x, x, mask=tgt_mask)
+        self_attn_out = self.norm1(self.dropout1(self_attn_out + x)) # Shape: [batch_size, tgt_seq_length, embed_dim]
     
+        # Encoder-decoder attention + feed-forward network
+        out = self.enc_dec_attention(enc_out, self_attn_out, enc_out)
+
+        return out
