@@ -268,12 +268,12 @@ class DecoderBlock(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, tgt_vocab_size: int, tgt_seq_len: int, embed_dim: int,  num_layers: int = 6, 
+    def __init__(self, tgt_seq_len: int, tgt_vocab_size: int, embed_dim: int,  num_layers: int = 6, 
                  expansion_factor: int = 4, n_heads: int = 8):
         """
         Args:
-            tgt_vocab_size: Target vocabulary size.
             tgt_seq_len: Length of the target sequence.
+            tgt_vocab_size: Target vocabulary size.
             embed_dim: Dimension of embedding vector.
             num_layers: Number of decoder layers.
             expansion_factor: Determines the intermediate dimension of the feed-forward network.
@@ -316,3 +316,75 @@ class TransformerDecoder(nn.Module):
 
         return out
 
+
+class Transformer(nn.Module):
+    def __init__(self, 
+                 src_vocab_size: int, 
+                 tgt_vocab_size: int,
+                 src_seq_len: int,
+                 tgt_seq_len: int,
+                 embed_dim: int,
+                 num_layers: int = 6,
+                 expansion_factor: int = 4,
+                 n_heads: int = 8):
+        """
+        Args:
+            src_vocab_size: Size of the source vocabulary.
+            tgt_vocab_size: Size of the target vocabulary.
+            src_seq_len: Length of the input source sequences.
+            tgt_seq_len: Length of the input target sequences.
+            embed_dim: Size of the embedding vectors.
+            num_layers: Number of the encoder and decoder layers.
+            expansion_factor: Determines the intermediate dimension in the feed-forward networks.
+            n_heads: Number of the heads in the multi-head attention (both self-attention and encoder-decoder attention) mechnism.
+        """
+        super(Transformer, self).__init__()
+        self.tgt_vocab_size = tgt_vocab_size
+
+        # Encoder
+        self.encoder = TransformerEncoder(src_seq_len, 
+                                          src_vocab_size, 
+                                          embed_dim, 
+                                          num_layers, 
+                                          expansion_factor, 
+                                          n_heads)
+        
+        # Decoder
+        self.decoder = TransformerDecoder(tgt_seq_len,
+                                          tgt_vocab_size,
+                                          embed_dim,
+                                          num_layers,
+                                          expansion_factor,
+                                          n_heads)
+        
+    def make_tgt_mask(self, tgt: torch.Tensor) -> torch.Tensor:
+        """
+        Creates a lower-triangular mask for target sequences to prevent attending to future positions.
+
+        Args:
+            tgt: Target sequence. Shape: [batch_size, tgt_seq_len]
+
+        Returns:
+            mask: Mask for target sequence. Shape: [batch_size, 1, tgt_seq_len, tgt_seq_len]
+        """
+        batch_size = tgt.size(0)
+        tgt_seq_len = tgt.size(1)
+        tgt_mask = torch.tril(torch.ones((tgt_seq_len, tgt_seq_len), device=tgt.device)).expand(batch_size, 1, tgt_seq_len, tgt_seq_len)
+
+        return tgt_mask
+    
+    def forward(self, src: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the transformer model.
+
+        Args: 
+            src: Input tensor of the encoder. Shape: [batch_size, src_seq_len]
+            tgt: Input tensor of the decoder. Shape: [batch_size, tgt_seq_len]
+
+        Returns:
+            Output probabilities for each target word. Shape: [batch_size, tgt_seq_len, tgt_vocab_size]
+        """
+        tgt_mask = self.make_tgt_mask(tgt)
+        enc_out = self.encoder(src)
+        outputs = self.decoder(tgt, enc_out, tgt_mask)
+        return outputs
