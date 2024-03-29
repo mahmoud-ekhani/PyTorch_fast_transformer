@@ -187,19 +187,19 @@ class TransformerBlock(nn.Module):
 
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, seq_len: int, vocab_size: int, embed_dim: int, num_layers: int = 6, expansion_factor: int = 4, n_heads: int = 8):
+    def __init__(self, src_seq_len: int, src_vocab_size: int, embed_dim: int, num_layers: int = 6, expansion_factor: int = 4, n_heads: int = 8):
         """
         Args:
-            seq_len: Length of the input sequence.
-            vocab_size: Size of the vocabulary.
+            src_seq_len: Length of the source input sequence.
+            src_vocab_size: Size of the source vocabulary.
             embed_dim: Dimension of the embedding.
             num_layers: Number of Transformer encoder layers.
             expansion_factor: Factor determining the intermediate size of the feed-forward layer in the Transformer block.
             n_heads: Number of attention heads in multi-head attention.
         """
         super(TransformerEncoder, self).__init__()
-        self.embedding_layer = TokenEmbedding(vocab_size, embed_dim)
-        self.positional_encoder = PositionalEncoding(seq_len, embed_dim)
+        self.embedding_layer = TokenEmbedding(src_vocab_size, embed_dim)
+        self.positional_encoder = PositionalEncoding(src_seq_len, embed_dim)
 
         self.layers = nn.ModuleList([
             TransformerBlock(embed_dim, expansion_factor, n_heads)
@@ -211,16 +211,16 @@ class TransformerEncoder(nn.Module):
         Forward pass of the Transformer Encoder consisting multiple Transformer blocks.
 
         Args:
-            x: Input sequence. Shape: [batch_size, seq_len]
+            x: Input sequence. Shape: [batch_size, src_seq_len]
 
         Returns:
-            Encoded output. Shape: [batch_size, seq_len, embed_dim]
+            Encoded output. Shape: [batch_size, src_seq_len, embed_dim]
         """
-        embed_out = self.embedding_layer(x) # Shape: [batch_size, seq_len, embed_dim]
-        out = self.positional_encoder(embed_out) # Shape: [batch_size, seq_len, embed_dim]
+        embed_out = self.embedding_layer(x) # Shape: [batch_size, src_seq_len, embed_dim]
+        out = self.positional_encoder(embed_out) # Shape: [batch_size, src_seq_len, embed_dim]
 
         for layer in self.layers:
-            out = layer(out, out, out) # Shape: [batch_size, seq_len, embed_dim]
+            out = layer(out, out, out) # Shape: [batch_size, src_seq_len, embed_dim]
 
         return out
 
@@ -268,20 +268,20 @@ class DecoderBlock(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, tgt_vocab_size: int, embed_dim: int, seq_len: int, num_layers: int = 6, 
+    def __init__(self, tgt_vocab_size: int, tgt_seq_len: int, embed_dim: int,  num_layers: int = 6, 
                  expansion_factor: int = 4, n_heads: int = 8):
         """
         Args:
             tgt_vocab_size: Target vocabulary size.
+            tgt_seq_len: Length of the target sequence.
             embed_dim: Dimension of embedding vector.
-            seq_len: Length of the target sequence.
             num_layers: Number of decoder layers.
             expansion_factor: Determines the intermediate dimension of the feed-forward network.
             n_heads: Number of heads in the multi-head self-attention mechanism.
         """
         super(TransformerDecoder, self).__init__()
         self.embedding_layer = TokenEmbedding(tgt_vocab_size, embed_dim)
-        self.positional_encoder = PositionalEncoding(seq_len, embed_dim)
+        self.positional_encoder = PositionalEncoding(tgt_seq_len, embed_dim)
 
         self.layers = nn.ModuleList([
             DecoderBlock(embed_dim, expansion_factor, n_heads)
