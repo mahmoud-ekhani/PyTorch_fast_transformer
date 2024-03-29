@@ -265,3 +265,54 @@ class DecoderBlock(nn.Module):
         out = self.enc_dec_attention(enc_out, self_attn_out, enc_out)
 
         return out
+
+
+class TransformerDecoder(nn.Module):
+    def __init__(self, tgt_vocab_size: int, embed_dim: int, seq_len: int, num_layers: int = 6, 
+                 expansion_factor: int = 4, n_heads: int = 8):
+        """
+        Args:
+            tgt_vocab_size: Target vocabulary size.
+            embed_dim: Dimension of embedding vector.
+            seq_len: Length of the target sequence.
+            num_layers: Number of decoder layers.
+            expansion_factor: Determines the intermediate dimension of the feed-forward network.
+            n_heads: Number of heads in the multi-head self-attention mechanism.
+        """
+        super(TransformerDecoder, self).__init__()
+        self.embedding_layer = TokenEmbedding(tgt_vocab_size, embed_dim)
+        self.positional_encoder = PositionalEncoding(seq_len, embed_dim)
+
+        self.layers = nn.ModuleList([
+            DecoderBlock(embed_dim, expansion_factor, n_heads)
+            for _ in range(num_layers)
+        ])
+
+        # Decoder output linear layer
+        self.out_lin = nn.Linear(embed_dim, tgt_vocab_size)
+        self.dropout = nn.Dropout(0.2)
+
+    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Transformer Decoder consisting of multiple Decoder blocks.
+
+        Args:
+            x: Target sequence. Shape: [batch_size, tgt_seq_len]
+            enc_out: Encoder output. Shape: [batch_size, src_seq_len, embed_dim]
+            tgt_mask: Decoder mask. Shape: [batch_size, 1, tgt_seq_len, tgt_seq_len]
+
+        Returns:
+            Decoder output. Shape: [batch_size, tgt_seq_len, tgt_vocab_size]
+        """
+        embed_out = self.embedding_layer(x) # Shape: [batch_size, tgt_seq_len, embed_dim]
+        out = self.positional_encoder(embed_out) # Shape: [batch_size, tgt_seq_len, embed_dim]
+        out = self.dropout(out)
+
+        for layer in self.layers:
+            out = layer(out, enc_out, tgt_mask) # Shape: [batch_size, tgt_seq_len, embed_dim]
+
+        # Fully-connected layer + Softmax
+        out = F.softmax(self.out_lin(out), dim=-1) # Shape: [batch_size, tgt_seq_len, tgt_vocab_size]
+
+        return out
+
