@@ -7,8 +7,8 @@ class LayerNormalization(nn.Module):
     def __init__(self, n_feats: int, eps: float = 1e-6):
         """
         Args:
-            n_feats: Number of features (features are located on the last dimension).
-            eps: Epsilon to prevent dividing by zero when the standard deviation is very small.
+            n_feats: Number of features. This is the size of the last dimension of the input.
+            eps: Epsilon value to avoid division by zero.
         """
         super(LayerNormalization, self).__init__()
         
@@ -18,21 +18,20 @@ class LayerNormalization(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward path of the layer normalization with learnable coefficients.
+        Forward path of the layer normalization.
 
         Args:
             x: The input feature tensor. Shape: [batch_size, seq_len, n_feat]
 
         Returs:
-            The input feature tensor normalized using the mean and standard deviation along the 
-            features dimension.
+            Normalized tensor of the same shape as the input.
         """
         mean = x.mean(dim=-1, keepdim=True) # Shape: [batch_size, seq_len, 1]
         std = x.std(dim=-1, keepdim=True) # Shape: [batch_size, seq_len, 1]
 
-        x = (x - mean) / (std + self.eps)
+        normalized_x = (x - mean) / (std + self.eps)
 
-        return self.alpha * x + self.beta
+        return self.alpha * normalized_x + self.beta
     
 
 class FeedForwardBlock(nn.Module):
