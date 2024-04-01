@@ -162,67 +162,86 @@ class ResidualConnection(nn.Module):
         """
         return x + self.dropout(sublayer(self.norm(x)))
 
-class MultiHeadAttention(nn.Module):
-    def __init__(self, embed_dim=512, n_heads=8):
-        """
-        Args:
-            embed_dim: Dimension of embedding vector output.
-            n_heads: Number of self-attention heads.
 
-        The embedding dimension should be divisible by the number of heads.
+class MultiHeadAttentionBlock(nn.Module):
+    def __init__(self, embed_dim: int = 512, n_heads: int = 8, dropout: float = 0.2):
         """
-        super(MultiHeadAttention, self).__init__()
+        Multi-Head Attention block as described in "Attention Is All You Need".
+
+        Args:
+            embed_dim: Total dimension of the embedding.
+            n_heads: Number of parallel attention heads.
+            dropout: Dropout rate applied to attention scores.
+
+        The embed_dim should be divisible by n_heads.
+        """
+        super(MultiHeadAttentionBlock, self).__init__()
         self.embed_dim = embed_dim
         self.n_heads = n_heads
-        self.single_head_dim = embed_dim // n_heads # Dimension per head (e.g., 512 / 8 = 64)
+        assert embed_dim % n_heads == 0, "embed_dim must be divisible by n_heads."
 
-        # Linear transformation for queries, keys, and values
-        self.query_matrix = nn.Linear(self.single_head_dim, self.single_head_dim, bias=False)
-        self.key_matrix = nn.Linear(self.single_head_dim, self.single_head_dim, bias=False)
-        self.value_matrix = nn.Linear(self.single_head_dim, self.single_head_dim, bias=False)
+        self.embed_dim_h = embed_dim // n_heads
+        self.w_q = nn.Linear(embed_dim, embed_dim, bias=False)    
+        self.w_k = nn.Linear(embed_dim, embed_dim, bias=False)    
+        self.w_v = nn.Linear(embed_dim, embed_dim, bias=False)    
+        self.w_o = nn.Linear(embed_dim, embed_dim, bias=False)    
+        self.dropout = nn.Dropout(dropout)
 
-        # Output linear layer
-        self.out = nn.Linear(self.n_heads * self.single_head_dim, self.embed_dim)
-
-    def forward(self, key: torch.Tensor, query: torch.Tensor, value: torch.Tensor, mask=None) -> torch.Tensor:
+    @staticmethod
+    def attention(query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, mask: torch.Tensor, dropout: nn.Dropout):
         """
-        Forward pass of the MultiHeadAttention layer.
-        
+        Scaled dot-product attention mechanism.
+
         Args:
-            key, query, value: Tensors of shape [batch_size, seq_len, embed_dim]
-            mask: Optional mask for the decoder. Shape: [batch_size, 1, seq_len_query, seq_len]
+            query, key, value: Query, key, and value tensors.
+            mask: Optional mask tensor.
+            dropout: Dropout layer to apply on attention scores.
 
         Returns:
-            Output of the multi-head attention. Shape: [batch_size, seq_len_query, embed_dim]
+            Output tensor and attention scores.
         """
-        batch_size = key.size(0)
-        seq_len = key.size(1)
-        seq_len_query = query.size(1)
-
-        # Reshape and linearly transform keys, queries, and values
-        key = self.key_matrix(key.view(batch_size, seq_len, self.n_heads, self.single_head_dim))
-        query = self.query_matrix(query.view(batch_size, seq_len_query, self.n_heads, self.single_head_dim))
-        value = self.value_matrix(value.view(batch_size, seq_len, self.n_heads, self.single_head_dim))
-
-        # Transpose to get dimensions [batch_size, n_heads, seq_len, single_head_dim]
-        key, query, value = [x.transpose(1, 2) for x in (key, query, value)]
-
-        # Scaled Dot-Product Attention
-        k_adjusted = key.transpose(-1, -2) # Shape: [batch_size, n_heads, single_head_dim, seq_len]
-        product = torch.matmul(query, k_adjusted) / math.sqrt(self.single_head_dim) # Shape: [batch_size, n_heads, seq_len_query, seq_len]
-
-        # Masking for decoder
-        if mask is not None:
-            product = product.masked_fill(mask == 0, float("-1e20"))
-
-        scores = F.softmax(product, dim=-1)
-        attention = torch.matmul(scores, value) # Shape: [batch_size, n_heads, seq_len_query, signle_head_dim]
-
-        # Concatenate the heads and pass through the final lineaer layer
-        concat = attention.transpose(1, 2).contiguous().view(batch_size, seq_len_query, -1) # Shape: [batch_size, seq_len_query, n_heads * single_head_dim]
-        output = self.out(concat) # Shape: [batch_size, seq_len_query, embed_dim]
+        embed_dim_h = query.shape[-1]
+        attention_scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(embed_dim_h)
         
-        return output
+        if mask is not None:
+            attention_scores = attention_scores.masked_fill(mask == 0, float('-inf'))
+        
+        attention_scores = F.softmax(attention_scores, dim=-1)
+        if dropout is not None:
+            attention_scores = dropout(attention_scores)
+
+        output = torch.matmul(attention_scores, value)
+        return output, attention_scores
+    
+    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the MultiHeadAttentionBlock.
+
+        Args:
+            query, key, value: Input tensors of shape [batch_size, seq_len, embed_dim].
+            mask: Optional mask of shape [batch_size, 1, seq_len, seq_len].
+
+        Returns:
+            Output of the multi-head attention mechanism.
+        """
+        batch_size, seq_len, _ = query.size()
+
+        query = self.w_q(query)
+        key = self.w_k(key)
+        value = self.w_v(value)
+
+        # Reshape and transpose for multi-head attention
+        query = query.view(batch_size, seq_len, self.n_heads, self.embed_dim_h).transpose(1, 2)
+        key = key.view(batch_size, seq_len, self.n_heads, self.embed_dim_h).transpose(1, 2)
+        value = value.view(batch_size, seq_len, self.n_heads, self.embed_dim_h).transpose(1, 2)
+
+        # Calculate attention
+        x, self.attention_scores = MultiHeadAttentionBlock.attention(query, key, value, mask, self.dropout)
+
+        # Concatenate and linear transformation
+        x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.n_heads * self.embed_dim_h)
+        out = self.w_o(x)
+        return out
 
 
 class TransformerBlock(nn.Module):
