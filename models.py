@@ -65,8 +65,6 @@ class FeedForwardBlock(nn.Module):
         return self.ffb(x)
 
 
-    
-
 class TokenEmbedding(nn.Module):
     def __init__(self, vocab_size: int, embed_dim: int):
         """
@@ -76,31 +74,31 @@ class TokenEmbedding(nn.Module):
         """
         super(TokenEmbedding, self).__init__()
         self.embed = nn.Embedding(vocab_size, embed_dim)
-        # Optional: Add a dropout layer if needed
-        # self.dropout = nn.Dropout(p=0.1)
     
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         """
         Passes the input through the embedding layer.
 
         Args:
-            token_ids: Tensor of token ids with shape [batch_size, seq_length].
+            token_ids: Tensor of token ids. Shape: [batch_size, seq_length].
         
         Returns:
-            out: Tensor of embeddings with shape [batch_size, seq_length, embed_dim].
+            out: Tensor of embeddings. Shape [batch_size, seq_length, embed_dim].
         """
         return self.embed(token_ids)
     
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, max_seq_len: int, embed_model_dim: int):
+    def __init__(self, max_seq_len: int, embed_model_dim: int, dropout: float = 0.2):
         """
         Args:
             max_seq_len: The maximum length of the input sequences.
             embed_model_dim: The dimension of the embedding.
+            droptout: The dropout rate.
         """
         super(PositionalEncoding, self).__init__()
         self.embed_dim = embed_model_dim
+        self.dropout = nn.Dropout(dropout)
 
         # Create a position tensor
         position = torch.arange(max_seq_len).unsqueeze(1)
@@ -135,7 +133,7 @@ class PositionalEncoding(nn.Module):
         seq_len = x.size(1)
         x = x + self.pe[:, :seq_len]
 
-        return x
+        return self.dropout(x)
     
 
 class MultiHeadAttention(nn.Module):
