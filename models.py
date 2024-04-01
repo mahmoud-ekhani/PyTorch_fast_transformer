@@ -136,6 +136,32 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
     
 
+class ResidualConnection(nn.Module):
+    def __init__(self, embed_dim: int = 512, dropout: float = 0.2):
+        """
+        Args:
+            embed_dim: The dimensionality of the input embeddings.
+            dropout: The dropout rate.
+        """
+        super(ResidualConnection, self).__init__()
+        
+        self.norm = LayerNormalization(embed_dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor, sublayer: nn.Module) -> torch.Tensor:
+        """
+        Forward pass of the residual connection with layer normalization and dropout.
+
+        Args:
+            x: The input tensor.
+            sublayer: A neural network layer (e.g., multi-head attention, feed-forward layer) 
+                                  that processes the input tensor after normalization.
+
+        Returns:
+            The output tensor after applying the residual connection.
+        """
+        return x + self.dropout(sublayer(self.norm(x)))
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, embed_dim=512, n_heads=8):
         """
