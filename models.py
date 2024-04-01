@@ -170,7 +170,7 @@ class TransformerBlock(nn.Module):
             key: Key tensor. Shape: [batch_size, seq_len, embed_dim]
             query: Query tensor. Shape: [batch_size, seq_len_query, embed_dim]
             value: Value tensor. Shape: [batch_size, seq_len, embed_dim]
-            mask: Optional mask for the decoder. Shape: [batch_size, 1, seq_len_query, seq_len]
+            mask: Optional mask. Shape: [batch_size, 1, seq_len_query, seq_len]
 
         Returns:
             Output after processing through the Transformer block. Shape: [batch_size, seq_len_query, embed_dim]
@@ -358,22 +358,33 @@ class Transformer(nn.Module):
                                           expansion_factor,
                                           n_heads)
         
-    def make_tgt_mask(self, tgt: torch.Tensor) -> torch.Tensor:
+    def make_mask(self, src: torch.Tensor, tgt: torch.Tensor):
         """
-        Creates a lower-triangular mask for target sequences to prevent attending to future positions.
+        Creates masks for the source and target sequences.
 
         Args:
+            src: Source sequence. Shape: [batch_size, src_seq_len]
             tgt: Target sequence. Shape: [batch_size, tgt_seq_len]
 
         Returns:
-            mask: Mask for target sequence. Shape: [batch_size, 1, tgt_seq_len, tgt_seq_len]
+            src_mask: Mask for source sequence. Shape: [batch_size, 1, 1, src_seq_len]
+            tgt_mask: Mask for target sequence. Shape: [batch_size, 1, tgt_seq_len, tgt_seq_len]
         """
-        batch_size = tgt.size(0)
-        tgt_seq_len = tgt.size(1)
-        tgt_mask = torch.tril(torch.ones((tgt_seq_len, tgt_seq_len), device=tgt.device)).expand(batch_size, 1, tgt_seq_len, tgt_seq_len)
+        batch_size, tgt_seq_len = tgt.size()
 
-        return tgt_mask
-    
+        # Mask for source sequence
+        src_mask = (src != 0).unsqueeze(1).unsqueeze(2) # Shape: [batch_size, 1, 1, src_seq_len]
+
+        # Mask for target sequence (future information prevention)
+        nopeak_mask = torch.tril(torch.ones((tgt_seq_len, tgt_seq_len), device=tgt.device)).bool() # Shape: [tgt_seq_len, tgt_seq_len]
+        nopeak_mask = nopeak_mask.unsqueeze(0).expand(batch_size, 1, tgt_seq_len, tgt_seq_len)
+
+        # Mask for target sequence (padding)
+        pad_mask = (tgt != 0).unsqueeze(1).unsqueeze(2) # Shape: [batch_size, 1, 1, tgt_seq_len]
+        tgt_mask = pad_mask & nopeak_mask  # Shape: [batch_size, 1, tgt_seq_len, tgt_seq_len]
+
+        return src_mask, tgt_mask
+
     def decode(self, src: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
         """
         Perform inference using the Transformer model.
