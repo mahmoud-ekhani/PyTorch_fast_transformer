@@ -33,8 +33,40 @@ class LayerNormalization(nn.Module):
         x = (x - mean) / (std + self.eps)
 
         return self.alpha * x + self.beta
+    
+
+class FeedForwardBlock(nn.Module):
+    def __init__(self, embed_dim: int = 512, d_ff: int = 2048, dropout: float = 0.2):
+        """
+        Args:
+            embed_dim: The embedding dimension.
+            d_ff: The intermediate feature size in the feedforward block.
+            dropout: The dropout rate.
+        """
+        super(FeedForwardBlock, self).__init__()
+        
+        self.ffb = nn.Sequential(
+            nn.Linear(embed_dim, d_ff),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, embed_dim)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        The forward pass of the FeedForwardBlock.
+        This block consists of two linear transformations with a ReLU activation in between.
+
+        Args:
+            x: Input tensor. Shape: [batch_size, seq_len, embed_dim].
+
+        Returns:
+            Output tensor. Shape: [batch_size, seq_len, embed_dim].
+        """
+        return self.ffb(x)
 
 
+    
 
 class TokenEmbedding(nn.Module):
     def __init__(self, vocab_size: int, embed_dim: int):
