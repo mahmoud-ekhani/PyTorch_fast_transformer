@@ -293,13 +293,14 @@ class TransformerDecoder(nn.Module):
         self.out_lin = nn.Linear(embed_dim, tgt_vocab_size)
         self.dropout = nn.Dropout(0.2)
 
-    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the Transformer Decoder consisting of multiple Decoder blocks.
 
         Args:
             x: Target sequence. Shape: [batch_size, tgt_seq_len]
             enc_out: Encoder output. Shape: [batch_size, src_seq_len, embed_dim]
+            src_mask: Encoder mask. Shape: [batch_size, 1, 1, src_seq_len]
             tgt_mask: Decoder mask. Shape: [batch_size, 1, tgt_seq_len, tgt_seq_len]
 
         Returns:
@@ -310,7 +311,7 @@ class TransformerDecoder(nn.Module):
         out = self.dropout(out)
 
         for layer in self.layers:
-            out = layer(out, enc_out, tgt_mask) # Shape: [batch_size, tgt_seq_len, embed_dim]
+            out = layer(out, enc_out, src_mask, tgt_mask) # Shape: [batch_size, tgt_seq_len, embed_dim]
 
         # Fully-connected layer + Softmax
         out = F.softmax(self.out_lin(out), dim=-1) # Shape: [batch_size, tgt_seq_len, tgt_vocab_size]
@@ -384,38 +385,6 @@ class Transformer(nn.Module):
         tgt_mask = pad_mask & nopeak_mask  # Shape: [batch_size, 1, tgt_seq_len, tgt_seq_len]
 
         return src_mask, tgt_mask
-
-    def decode(self, src: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
-        """
-        Perform inference using the Transformer model.
-
-        Args:
-            src: Input to the encoder. Shape: [batch_size, src_seq_len]
-            tgt: Partial input to the decoder (e.g., start token). Shape: [batch_size, 1]
-        
-        Returns:
-            Predicted sequence. Shape: [batch_size, pred_seq_len]
-        """
-        batch_size = src.size(0)
-        seq_len = src.size(1)
-
-        enc_out = self.encoder(src) # Shape: [batch_size, src_seq_len, embed_dim]
-        out_labels = []
-        out = tgt
-        for t in range(1, seq_len):
-            tgt_mask = self.make_tgt_mask(out)
-
-            # Decoding the next token
-            output = self.decoder(out, enc_out, tgt_mask)
-
-            out = output[:, -1, :]
-            out = out.argmax(-1)
-            out_labels.append(out.item())
-            out = torch.unsqueeze(out, axis=0)
-        return out_labels
-
-
-
     
     def forward(self, src: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
         """
@@ -428,8 +397,8 @@ class Transformer(nn.Module):
         Returns:
             Output probabilities for each target word. Shape: [batch_size, tgt_seq_len, tgt_vocab_size]
         """
-        tgt_mask = self.make_tgt_mask(tgt)
+        src_mask, tgt_mask = self.make_mask(src, tgt)
         enc_out = self.encoder(src)
-        outputs = self.decoder(tgt, enc_out, tgt_mask)
+        outputs = self.decoder(tgt, enc_out, src_mask, tgt_mask)
 
         return outputs
