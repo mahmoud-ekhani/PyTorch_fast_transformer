@@ -244,17 +244,18 @@ class DecoderBlock(nn.Module):
         self.enc_dec_attention = TransformerBlock(embed_dim, expansion_factor, n_heads)
        
 
-    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the Decoder Block.
 
         Args:
             x: Input tensor from previous decoder layer. Shape: [batch_size, tgt_seq_len, embed_dim]
             enc_out: Output tensor from the encoder. Shape: [batch_size, src_seq_len, embed_dim]
-            tgt_mask: Target mask tensor. Shape: [batch_size, 1, tgt_seq_length, tgt_seq_length]
+            src_mask: Source mask tensor. Shape: [batch_size, 1, src_seq_len, src_seq_len]
+            tgt_mask: Target mask tensor. Shape: [batch_size, 1, tgt_seq_len, tgt_seq_len]
 
         Returns:
-            Output tensor. Shape: [batch_size, tgt_seq_length, embed_dim]
+            Output tensor. Shape: [batch_size, tgt_seq_len, embed_dim]
         """
 
         # Masked self-attention
@@ -262,7 +263,7 @@ class DecoderBlock(nn.Module):
         self_attn_out = self.norm1(self.dropout1(self_attn_out + x)) # Shape: [batch_size, tgt_seq_length, embed_dim]
     
         # Encoder-decoder attention + feed-forward network
-        out = self.enc_dec_attention(enc_out, self_attn_out, enc_out)
+        out = self.enc_dec_attention(enc_out, self_attn_out, enc_out, src_mask)
 
         return out
 
@@ -373,6 +374,38 @@ class Transformer(nn.Module):
 
         return tgt_mask
     
+    def decode(self, src: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
+        """
+        Perform inference using the Transformer model.
+
+        Args:
+            src: Input to the encoder. Shape: [batch_size, src_seq_len]
+            tgt: Partial input to the decoder (e.g., start token). Shape: [batch_size, 1]
+        
+        Returns:
+            Predicted sequence. Shape: [batch_size, pred_seq_len]
+        """
+        batch_size = src.size(0)
+        seq_len = src.size(1)
+
+        enc_out = self.encoder(src) # Shape: [batch_size, src_seq_len, embed_dim]
+        out_labels = []
+        out = tgt
+        for t in range(1, seq_len):
+            tgt_mask = self.make_tgt_mask(out)
+
+            # Decoding the next token
+            output = self.decoder(out, enc_out, tgt_mask)
+
+            out = output[:, -1, :]
+            out = out.argmax(-1)
+            out_labels.append(out.item())
+            out = torch.unsqueeze(out, axis=0)
+        return out_labels
+
+
+
+    
     def forward(self, src: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the transformer model.
@@ -387,4 +420,5 @@ class Transformer(nn.Module):
         tgt_mask = self.make_tgt_mask(tgt)
         enc_out = self.encoder(src)
         outputs = self.decoder(tgt, enc_out, tgt_mask)
+
         return outputs
