@@ -11,6 +11,7 @@ class LayerNormalization(nn.Module):
             eps: Epsilon value to avoid division by zero.
         """
         super(LayerNormalization, self).__init__()
+        self.eps = eps
         
         # Define alpha and beta tensors as learnable parameters for each feature
         self.alpha = nn.Parameter(torch.ones(n_feats))
@@ -18,13 +19,13 @@ class LayerNormalization(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward path of the layer normalization.
+        Forward pass of the layer normalization.
 
         Args:
-            x: The input feature tensor. Shape: [batch_size, seq_len, n_feat]
+            x: The input feature tensor of shape: [batch_size, seq_len, n_feat]
 
         Returs:
-            Normalized tensor of the same shape as the input.
+            Normalized tensor of the same shape as input.
         """
         mean = x.mean(dim=-1, keepdim=True) # Shape: [batch_size, seq_len, 1]
         std = x.std(dim=-1, keepdim=True) # Shape: [batch_size, seq_len, 1]
@@ -403,3 +404,134 @@ class ProjectionLayer(nn.Module):
             The decoder output projected to the shape [batch_size, seq_len, vocab_size].
         """
         return self.proj(x)
+
+
+import torch
+import torch.nn as nn
+
+class Transformer(nn.Module):
+    def __init__(self, 
+                 encoder: Encoder, 
+                 decoder: Decoder, 
+                 src_embed: TokenEmbedding, 
+                 tgt_embed: TokenEmbedding,
+                 src_pos: PositionalEncoding, 
+                 tgt_pos: PositionalEncoding,
+                projection_layer: ProjectionLayer):
+        """
+        Args:
+            encoder: The Transformer's encoder.
+            decoder: The Transformer's decoder.
+            src_embed: Embedding layer for source vocabulary.
+            tgt_embed: Embedding layer for target vocabulary.
+            src_pos: Positional encoding layer for source sequence.
+            tgt_pos: Positional encoding layer for target sequence.
+            projection_layer: Projection layer to output vocabulary size.
+        """
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = src_embed
+        self.tgt_embed = tgt_embed
+        self.src_pos = src_pos
+        self.tgt_pos = tgt_pos
+        self.projection_layer = projection_layer
+
+    def encode(self, src: torch.Tensor, src_mask: torch.Tensor) -> torch.Tensor:
+        """
+        Encodes the source sequence.
+
+        Args:
+            src: The source sequence tensor.
+            src_mask: The source mask tensor.
+
+        Returns:
+            The encoded output.
+        """
+        src = self.src_embed(src)
+        src = self.src_pos(src)
+        return self.encoder(src, src_mask)
+    
+    def decode(self, encoder_output: torch.Tensor, src_mask: torch.Tensor, tgt: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
+        """
+        Decodes the target sequence.
+
+        Args:
+            encoder_output: The output from the encoder.
+            src_mask: The source mask tensor.
+            tgt: The target sequence tensor.
+            tgt_mask: The target mask tensor.
+
+        Returns:
+            The decoded output.
+        """
+        tgt = self.tgt_embed(tgt)
+        tgt = self.tgt_pos(tgt)
+        return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
+    
+    def project(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Projects the decoded sequence to the vocabulary space.
+
+        Args:
+            x: The decoded sequence tensor.
+
+        Returns:
+            The output tensor in the vocabulary space.
+        """
+        return self.projection_layer(x)
+
+def build_transformer(src_vocab_size: int, 
+                      tgt_vocab_size: int, 
+                      src_seq_len: int, 
+                      tgt_seq_len: int, 
+                      embed_dim: int = 512, 
+                      n_layers: int = 6,
+                      n_heads: int = 8, 
+                      dropout: float = 0.1,
+                      d_ff: int = 2048) -> Transformer:
+    """
+    Builds a Transformer model with specified parameters.
+
+    Args:
+        src_vocab_size: Source vocabulary size.
+        tgt_vocab_size: Target vocabulary size.
+        src_seq_len: Maximum length of source sequences.
+        tgt_seq_len: Maximum length of target sequences.
+        embed_dim: Dimensionality of the model's embeddings.
+        n_layers: Number of layers in both the encoder and decoder.
+        n_heads: Number of attention heads.
+        dropout (float): Dropout rate.
+        d_ff (int): Dimensionality of the feed-forward network's intermediate layer.
+
+    Returns:
+        An instance of the Transformer model.
+    """
+    # Create embedding and positional encoding layers
+    src_embed = TokenEmbedding(embed_dim, src_vocab_size)
+    tgt_embed = TokenEmbedding(embed_dim, tgt_vocab_size)
+    src_pos = PositionalEncoding(embed_dim, src_seq_len, dropout)
+    tgt_pos = PositionalEncoding(embed_dim, tgt_seq_len, dropout)
+
+    # Build encoder and decoder layers
+    encoder_layers = [EncoderBlock(embed_dim, n_heads, d_ff, dropout) for _ in range(n_layers)]
+    decoder_layers = [DecoderBlock(embed_dim, n_heads, d_ff, dropout) for _ in range(n_layers)]
+    
+    # Create encoder and decoder
+    encoder = Encoder(embed_dim, nn.ModuleList(encoder_layers))
+    decoder = Decoder(embed_dim, nn.ModuleList(decoder_layers))
+
+    # Create projection layer
+    projection_layer = ProjectionLayer(embed_dim, tgt_vocab_size)
+
+    # Initialize Transformer model
+    transformer = Transformer(encoder, decoder, src_embed, tgt_embed, src_pos, tgt_pos, projection_layer)
+    transformer.apply(_initialize_weights)
+    
+    return transformer
+
+def _initialize_weights(m: nn.Module):
+    if isinstance(m, (nn.Linear, nn.Embedding)):
+        nn.init.xavier_uniform_(m.weight)
+    if isinstance(m, nn.Linear) and m.bias is not None:
+        nn.init.constant_(m.bias, 0)
