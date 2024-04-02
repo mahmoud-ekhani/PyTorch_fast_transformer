@@ -136,10 +136,10 @@ class PositionalEncoding(nn.Module):
     
 
 class ResidualConnection(nn.Module):
-    def __init__(self, embed_dim: int = 512, dropout: float = 0.2):
+    def __init__(self, embed_dim: int, dropout: float):
         """
         Args:
-            embed_dim: The dimensionality of the input embeddings.
+            embed_dim: The embedding dimension.
             dropout: The dropout rate.
         """
         super(ResidualConnection, self).__init__()
@@ -163,12 +163,12 @@ class ResidualConnection(nn.Module):
 
 
 class MultiHeadAttentionBlock(nn.Module):
-    def __init__(self, embed_dim: int = 512, n_heads: int = 8, dropout: float = 0.2):
+    def __init__(self, embed_dim: int, n_heads: int, dropout: float):
         """
         Multi-Head Attention block as described in "Attention Is All You Need".
 
         Args:
-            embed_dim: Total dimension of the embedding.
+            embed_dim: The embeddings dimension.
             n_heads: Number of parallel attention heads.
             dropout: Dropout rate applied to attention scores.
 
@@ -189,7 +189,7 @@ class MultiHeadAttentionBlock(nn.Module):
     @staticmethod
     def attention(query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, mask: torch.Tensor, dropout: nn.Dropout):
         """
-        Scaled dot-product attention mechanism.
+        Scaled dot-product attention.
 
         Args:
             query, key, value: Query, key, and value tensors.
@@ -203,7 +203,7 @@ class MultiHeadAttentionBlock(nn.Module):
         attention_scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(embed_dim_h)
         
         if mask is not None:
-            attention_scores = attention_scores.masked_fill(mask == 0, float('-inf'))
+            attention_scores = attention_scores.masked_fill_(mask == 0, float('-inf'))
         
         attention_scores = F.softmax(attention_scores, dim=-1)
         if dropout is not None:
@@ -218,7 +218,7 @@ class MultiHeadAttentionBlock(nn.Module):
 
         Args:
             query, key, value: Input tensors of shape [batch_size, seq_len, embed_dim].
-            mask: Optional mask of shape [batch_size, 1, seq_len, seq_len].
+            mask: Optional mask.
 
         Returns:
             Output of the multi-head attention mechanism.
