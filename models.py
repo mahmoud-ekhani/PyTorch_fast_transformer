@@ -244,31 +244,34 @@ class MultiHeadAttentionBlock(nn.Module):
 
 
 class EncoderBlock(nn.Module):
-    def __init__(self, embed_dim: int, n_heads: int, d_ff: int, dropout: float):
+    def __init__(self, 
+                 embed_dim: int,
+                 self_attention_block: MultiHeadAttentionBlock,
+                 feed_forward_block: FeedForwardBlock,
+                 dropout: float):
         """
         Args:
-            embed_dim: The number of features in the input embeddings.
-            n_heads: The number of heads in the multi-head attention mechanism.
-            d_ff: The intermediate dimension of the feed-forward network.
+            embed_dim: The embedding dimension.
+            self_attention_block: The multi-head self-attention block.
+            feed_forward_block: The feed-forward network.
             dropout: The dropout rate.
         """
-        super(EncoderBlock, self).__init__()
-        self.self_attention_block = MultiHeadAttentionBlock(embed_dim=embed_dim, n_heads=n_heads, dropout=dropout)
-        self.feed_forward_block = FeedForwardBlock(embed_dim=embed_dim, d_ff=d_ff, dropout=dropout)
+        self.self_attention_block = self_attention_block
+        self.feed_forward_block = feed_forward_block
         self.residual_connections = nn.ModuleList([
-            ResidualConnection(embed_dim=embed_dim, dropout=dropout) for _ in range(2)
+            ResidualConnection(embed_dim, dropout) for _ in range(2)
         ])
-
+    
     def forward(self, x: torch.Tensor, src_mask: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass of the transformer encoder block.
+        The encoder block consists of a self-attention layer and a feed-forward network.
 
         Args:
-            x: The input tensor with shape [batch_size, seq_len, embed_dim].
-            src_mask: The source mask tensor with shape [batch_size, 1, seq_len, seq_len].
-
+            x: The input to self-attention. Shape: [batch_size, seq_len, embed_dim]
+            src_mask: Optional input sequence mask.
+        
         Returns:
-            Output tensor of shape [batch_size, seq_len, embed_dim].
+            The output tensor. Shape: [batch_size, seq_len, embed_dim]
         """
         # Apply self-attention
         self_attention = lambda x: self.self_attention_block(x, x, x, src_mask)
@@ -276,8 +279,8 @@ class EncoderBlock(nn.Module):
 
         # Apply feed-forward network
         x = self.residual_connections[1](x, self.feed_forward_block)
+
         return x
-    
 
 class Encoder(nn.Module):
     def __init__(self, embed_dim: int, layers: nn.ModuleList):
