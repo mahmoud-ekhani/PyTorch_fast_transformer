@@ -359,7 +359,6 @@ class DecoderBlock(nn.Module):
         return x
         
     
-
 class Decoder(nn.Module):
     def __init__(self, embed_dim: int, layers: nn.ModluleList):
         """
@@ -378,8 +377,7 @@ class Decoder(nn.Module):
         Args:
             x: The target input tensor of shape [batch_size, seq_len, embed_dim].
             enc_out: The encoder output tensor of shape [batch_size, seq_len, embed_dim].
-            src_mask: The source mask tensor of shape [batch_size, 1, seq_len, seq_len].
-            tgt_mask: The target mask tensor of shape [batch_size, 1, seq_len, seq_len].
+            src_mask, tgt_mask: The source and target masks, respectively.
 
         Returns:
             Output tensor of shape [batch_size, seq_len, embed_dim].
@@ -413,9 +411,6 @@ class ProjectionLayer(nn.Module):
         return self.proj(x)
 
 
-import torch
-import torch.nn as nn
-
 class Transformer(nn.Module):
     def __init__(self, 
                  encoder: Encoder, 
@@ -424,7 +419,7 @@ class Transformer(nn.Module):
                  tgt_embed: InputEmbeddings,
                  src_pos: PositionalEncoding, 
                  tgt_pos: PositionalEncoding,
-                projection_layer: ProjectionLayer):
+                 projection_layer: ProjectionLayer):
         """
         Args:
             encoder: The Transformer's encoder.
@@ -435,7 +430,7 @@ class Transformer(nn.Module):
             tgt_pos: Positional encoding layer for target sequence.
             projection_layer: Projection layer to output vocabulary size.
         """
-        super().__init__()
+        super(Transformer, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.src_embed = src_embed
@@ -520,25 +515,36 @@ def build_transformer(src_vocab_size: int,
     src_pos = PositionalEncoding(embed_dim, src_seq_len, dropout)
     tgt_pos = PositionalEncoding(embed_dim, tgt_seq_len, dropout)
 
-    # Build encoder and decoder layers
-    encoder_layers = [EncoderBlock(embed_dim, n_heads, d_ff, dropout) for _ in range(n_layers)]
-    decoder_layers = [DecoderBlock(embed_dim, n_heads, d_ff, dropout) for _ in range(n_layers)]
-    
-    # Create encoder and decoder
-    encoder = Encoder(embed_dim, nn.ModuleList(encoder_layers))
-    decoder = Decoder(embed_dim, nn.ModuleList(decoder_layers))
+    # Create the encoder blocks
+    encoder_blocks = []
+    for _ in range(n_layers):
+        encoder_self_attention_block = MultiHeadAttentionBlock(embed_dim, n_heads, dropout)
+        feed_forward_block = FeedForwardBlock(embed_dim, d_ff, dropout)
+        encoder_block = EncoderBlock(embed_dim, encoder_self_attention_block, feed_forward_block, dropout)
+        encoder_blocks.append(encoder_block)
 
-    # Create projection layer
+    # Create the decoder blocks
+    decoder_blocks = []
+    for _ in range(n_layers):
+        decoder_self_attention_block = MultiHeadAttentionBlock(embed_dim, n_heads, dropout)
+        decoder_cross_attention_block = MultiHeadAttentionBlock(embed_dim, n_heads, dropout)
+        feed_forward_block = FeedForwardBlock(embed_dim, d_ff, dropout)
+        decoder_block = DecoderBlock(embed_dim, decoder_self_attention_block, decoder_cross_attention_block, feed_forward_block, dropout)
+        decoder_blocks.append(decoder_block)
+
+    # Create the encoder and decoder
+    encoder = Encoder(embed_dim, nn.ModuleList(encoder_blocks))
+    decoder = Decoder(embed_dim, nn.ModuleList(decoder_blocks))
+
+    # Create the projection layer
     projection_layer = ProjectionLayer(embed_dim, tgt_vocab_size)
 
-    # Initialize Transformer model
+    # Create the transformer
     transformer = Transformer(encoder, decoder, src_embed, tgt_embed, src_pos, tgt_pos, projection_layer)
-    transformer.apply(_initialize_weights)
+
+     # Initialize the parameters
+    for p in transformer.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
     
     return transformer
-
-def _initialize_weights(m: nn.Module):
-    if isinstance(m, (nn.Linear, nn.Embedding)):
-        nn.init.xavier_uniform_(m.weight)
-    if isinstance(m, nn.Linear) and m.bias is not None:
-        nn.init.constant_(m.bias, 0)
