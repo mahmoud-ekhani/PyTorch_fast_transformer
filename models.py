@@ -299,7 +299,7 @@ class Encoder(nn.Module):
 
         Args:
             x: The input embedding tensor of shape [batch_size, seq_len, embed_dim].
-            src_mask: The source mask of shape [batch_size, 1, seq_len, seq_len].
+            src_mask: The source mask.
 
         Returns:
             An encoder output tensor of shape [batch_size, seq_len, embed_dim].
@@ -311,47 +311,53 @@ class Encoder(nn.Module):
     
 
 class DecoderBlock(nn.Module):
-    def __init__(self, embed_dim: int, n_heads: int, d_ff: int, dropout: float):
+    def __init__(self, 
+                 embed_dim: int,
+                 self_attention_block: MultiHeadAttentionBlock,
+                 cross_attention_block: MultiHeadAttentionBlock,
+                 feed_forward_block: FeedForwardBlock,
+                 dropout: float):
         """
         Args:
-            embed_dim: The number of features in the input embeddings.
-            n_heads: The number of heads in the multi-head attention mechanism.
-            d_ff: The intermediate dimension of the feed-forward network.
+            embed_dim: The embeddings dimension.
+            self_attention_block: The decoder self-attention block.
+            cross_attention_block: The encoder-decoder cross-attention block.
+            feed_forward_block: The feed-forward block of the decoder.
             dropout: The dropout rate.
         """
-        super(DecoderBlock, self).__init__()
-        self.self_attention_block = MultiHeadAttentionBlock(embed_dim, n_heads, dropout)
-        self.cross_attention_block = MultiHeadAttentionBlock(embed_dim, n_heads, dropout)
-        self.feed_forward_block = FeedForwardBlock(embed_dim, d_ff, dropout)
+        self.self_attention_block = self_attention_block
+        self.cross_attention_block = cross_attention_block
+        self.feed_forward_block = feed_forward_block
         self.residual_connections = nn.ModuleList([
             ResidualConnection(embed_dim, dropout) for _ in range(3)
         ])
 
     def forward(self, x: torch.Tensor, enc_out: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
         """
-        The forward pass of the transformer decoder block.
+        Forward pass of the transformer decoder block composed of self-attention, 
+            encoder-decoder cross-attention, and a feed-forward network.
 
         Args:
-            x: The target input tensor of shape [batch_size, seq_len, embed_dim].
+            x: The decoder input tensor of shape [batch_size, seq_len, embed_dim].
             enc_out: The encoder output tensor of shape [batch_size, seq_len, embed_dim].
-            src_mask: The source mask tensor of shape [batch_size, 1, seq_len, seq_len].
-            tgt_mask: The target mask tensor of shape [batch_size, 1, seq_len, seq_len].
+            src_mask, tgt_mask: The mask tensors of the source and target sequences.
 
         Returns:
-            Output tensor of shape [batch_size, seq_len, embed_dim].
+            The decoder block output tensor of shape [batch_size, seq_len, embed_dim]
         """
         # Apply self-attention
         self_attention = lambda x: self.self_attention_block(x, x, x, tgt_mask)
         x = self.residual_connections[0](x, self_attention)
 
-        # Apply cross-attention
+        # Apply encoder-decoder cross-attention
         cross_attention = lambda x: self.cross_attention_block(x, enc_out, enc_out, src_mask)
         x = self.residual_connections[1](x, cross_attention)
 
         # Apply feed-forward network
         x = self.residual_connections[2](x, self.feed_forward_block)
-        
+
         return x
+        
     
 
 class Decoder(nn.Module):
