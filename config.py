@@ -1,34 +1,33 @@
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
-@dataclass
-class Config:
-    batch_size: int = 8
-    num_epochs: int = 20
-    lr: float = 1e-4
-    seq_len: int = 350
-    embed_dim: int = 512
-    src_lang: str = 'en'
-    tgt_lang: str = 'it'
-    data_source: str = 'opus_books'
-    model_folder: str = 'checkpoints'
-    model_basename: str = 'tmodel_'
-    preload: str = 'latest'
-    tokenizer_file: str = 'tokenizer_{0}.json'
-    experiment_name: str = 'runs/tmodel'
+def get_config():
+    return {
+        "batch_size": 8,
+        "num_epochs": 20,
+        "lr": 10**-4,
+        "seq_len": 350,
+        "d_model": 512,
+        "datasource": 'opus_books',
+        "lang_src": "en",
+        "lang_tgt": "it",
+        "model_folder": "weights",
+        "model_basename": "tmodel_",
+        "preload": "latest",
+        "tokenizer_file": "tokenizer_{0}.json",
+        "experiment_name": "runs/tmodel"
+    }
 
-def get_weights_file_path(config: Config, epoch: str) -> str:
-    model_folder = Path('.') / f"{config.data_source}_{config.model_folder}"
-    model_filename = f"{config.model_basename}{epoch}.pt"
-    return str(model_folder / model_filename)
+def get_weights_file_path(config, epoch: str):
+    model_folder = f"{config['datasource']}_{config['model_folder']}"
+    model_filename = f"{config['model_basename']}{epoch}.pt"
+    return str(Path('.') / model_folder / model_filename)
 
-def latest_weights_file_path(config: Config) -> Optional[str]:
-    model_folder = Path('.') / f"{config.data_source}_{config.model_folder}"
-    model_filename = f"{config.model_basename}*"
-    all_weights_files = list(model_folder.glob(model_filename))
-    if not all_weights_files:
+# Find the latest weights file in the weights folder
+def latest_weights_file_path(config):
+    model_folder = f"{config['datasource']}_{config['model_folder']}"
+    model_filename = f"{config['model_basename']}*"
+    weights_files = list(Path(model_folder).glob(model_filename))
+    if len(weights_files) == 0:
         return None
-    all_weights_files.sort()
-    return str(all_weights_files[-1])
-
+    weights_files.sort()
+    return str(weights_files[-1])
