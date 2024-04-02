@@ -359,6 +359,7 @@ class Decoder(nn.Module):
             embed_dim: The number of features in the input embeddings.
             layers: A module list of DecoderBlock layers.
         """
+        super(Decoder, self).__init__()
         self.layers = layers
         self.norm = LayerNormalization(embed_dim)
 
@@ -379,3 +380,26 @@ class Decoder(nn.Module):
             x = layer(x, enc_out, src_mask, tgt_mask)
         
         return self.norm(x)
+    
+
+class ProjectionLayer(nn.Module):
+    def __init__(self, embed_dim: int, vocab_size: int):
+        """
+        Args:
+            embed_dim: The number of features in token embeddings.
+            vocab_size: The target vocabulary size.
+        """
+        super(ProjectionLayer, self).__init__()
+        self.proj = nn.Linear(embed_dim, vocab_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        The forward pass of the projection layer.
+        
+        Args:
+            x: The decoder output of shape [batch_size, seq_len, embed_dim].
+
+        Returns:
+            The decoder output projected to the shape [batch_size, seq_len, vocab_size].
+        """
+        return self.proj(x)
