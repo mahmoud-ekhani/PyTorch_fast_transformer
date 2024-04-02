@@ -278,3 +278,31 @@ class EncoderBlock(nn.Module):
         # Apply feed-forward network
         x = self.residual_connections[1](x, self.feed_forward_block)
         return x
+    
+
+class Encoder(nn.Module):
+    def __init__(self, embed_dim: int, layers: nn.ModuleList):
+        """
+        Args:
+            embed_dim: The number of features in the input embeddings.
+            layers: A module list of EncoderBlock layers.
+        """
+        super(Encoder, self).__init__()
+        self.layers = layers
+        self.norm = LayerNormalization(embed_dim)
+
+    def forward(self, x: torch.Tensor, src_mask: torch.Tensor) -> torch.Tensor:
+        """
+        The forward pass of the Encoder through its layers.
+
+        Args:
+            x: The input embedding tensor of shape [batch_size, seq_len, embed_dim].
+            src_mask: The source mask of shape [batch_size, 1, seq_len, seq_len].
+
+        Returns:
+            An encoder output tensor of shape [batch_size, seq_len, embed_dim].
+        """
+        for layer in self.layers:
+            x = layer(x, src_mask)
+        
+        return self.norm(x)
