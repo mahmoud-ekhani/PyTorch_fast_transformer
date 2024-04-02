@@ -36,11 +36,11 @@ class LayerNormalization(nn.Module):
     
 
 class FeedForwardBlock(nn.Module):
-    def __init__(self, embed_dim: int = 512, d_ff: int = 2048, dropout: float = 0.2):
+    def __init__(self, embed_dim: int, d_ff: int, dropout: float):
         """
         Args:
             embed_dim: The embedding dimension.
-            d_ff: The intermediate feature size in the feedforward block.
+            d_ff: The intermediate dimension of the feed-forward network.
             dropout: The dropout rate.
         """
         super(FeedForwardBlock, self).__init__()
@@ -54,26 +54,27 @@ class FeedForwardBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        The forward pass of the FeedForwardBlock.
-        This block consists of two linear transformations with a ReLU activation in between.
+        The forward pass of the FeedForwardBlock, which consists of two linear
+          transformations with a ReLU activation in between.
 
         Args:
-            x: Input tensor. Shape: [batch_size, seq_len, embed_dim].
+            x: Input tensor of ahape: [batch_size, seq_len, embed_dim].
 
         Returns:
-            Output tensor. Shape: [batch_size, seq_len, embed_dim].
+            Output tensor of shape: [batch_size, seq_len, embed_dim].
         """
         return self.ffb(x)
 
 
-class TokenEmbedding(nn.Module):
+class InputEmbeddings(nn.Module):
     def __init__(self, vocab_size: int, embed_dim: int):
         """
         Args:
-            vocab_size: Size of the vocabulary.
-            embed_dim: Dimension of the token embeddings.
+            vocab_size: The vocabulary size.
+            embed_dim: The embedding dimension.
         """
-        super(TokenEmbedding, self).__init__()
+        super(InputEmbeddings, self).__init__()
+        self.embed_dim = embed_dim
         self.embed = nn.Embedding(vocab_size, embed_dim)
     
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
@@ -81,34 +82,34 @@ class TokenEmbedding(nn.Module):
         Passes the input through the embedding layer.
 
         Args:
-            token_ids: Tensor of token ids. Shape: [batch_size, seq_length].
+            token_ids: Tensor of token ids with shape: [batch_size, seq_length].
         
         Returns:
-            out: Tensor of embeddings. Shape [batch_size, seq_length, embed_dim].
+            out: Tensor of embeddings with shape [batch_size, seq_length, embed_dim].
         """
-        return self.embed(token_ids)
+        return self.embed(token_ids) * math.sqrt(self.embed_dim)
     
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, max_seq_len: int, embed_model_dim: int, dropout: float = 0.2):
+    def __init__(self, seq_len: int, embed_dim: int, dropout: float):
         """
         Args:
-            max_seq_len: The maximum length of the input sequences.
-            embed_model_dim: The dimension of the embedding.
+            seq_len: The maximum length of the input sequences.
+            embed_dim: The embedding dimension.
             droptout: The dropout rate.
         """
         super(PositionalEncoding, self).__init__()
-        self.embed_dim = embed_model_dim
+        self.embed_dim = embed_dim
         self.dropout = nn.Dropout(dropout)
 
         # Create a position tensor
-        position = torch.arange(max_seq_len).unsqueeze(1)
+        position = torch.arange(seq_len).unsqueeze(1)
         # Compute the div term for the sinusoidal functions
-        div_term = torch.exp(torch.arange(0, embed_model_dim, 2) * \
-                             -(math.log(10000.0) / embed_model_dim))
+        div_term = torch.exp(torch.arange(0, embed_dim, 2) * \
+                             -(math.log(10000.0) / embed_dim))
         
         # Initialize a zeros tensor for positional encoding
-        pe = torch.zeros(max_seq_len, embed_model_dim)
+        pe = torch.zeros(seq_len, embed_dim)
 
         # Apply the sinusoidal functions
         pe[:, 0::2] = torch.sin(position * div_term)
@@ -123,16 +124,13 @@ class PositionalEncoding(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x: Input tensor with shape [batch_size, seq_length, embed_dim]
+            x: Input tensor of input embeddings with shape [batch_size, seq_length, embed_dim]
         Returns:
             Tensor with positional embeddings added to the original embedding.
         """
-        # Scale embeddings by the square root of the embedding dimension
-        x = x * math.sqrt(self.embed_dim)
-
         # Add positional encoding to the input tensor
         seq_len = x.size(1)
-        x = x + self.pe[:, :seq_len]
+        x = x + (self.pe[:, :seq_len, :]).requires_grad_(False) # Shape: [batch_size, seq_len, embed_dim]
 
         return self.dropout(x)
     
@@ -413,8 +411,8 @@ class Transformer(nn.Module):
     def __init__(self, 
                  encoder: Encoder, 
                  decoder: Decoder, 
-                 src_embed: TokenEmbedding, 
-                 tgt_embed: TokenEmbedding,
+                 src_embed: InputEmbeddings, 
+                 tgt_embed: InputEmbeddings,
                  src_pos: PositionalEncoding, 
                  tgt_pos: PositionalEncoding,
                 projection_layer: ProjectionLayer):
@@ -508,8 +506,8 @@ def build_transformer(src_vocab_size: int,
         An instance of the Transformer model.
     """
     # Create embedding and positional encoding layers
-    src_embed = TokenEmbedding(embed_dim, src_vocab_size)
-    tgt_embed = TokenEmbedding(embed_dim, tgt_vocab_size)
+    src_embed = InputEmbeddings(embed_dim, src_vocab_size)
+    tgt_embed = InputEmbeddings(embed_dim, tgt_vocab_size)
     src_pos = PositionalEncoding(embed_dim, src_seq_len, dropout)
     tgt_pos = PositionalEncoding(embed_dim, tgt_seq_len, dropout)
 
