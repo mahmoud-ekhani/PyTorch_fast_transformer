@@ -124,3 +124,58 @@ def get_model(config, vocab_src_len, vocab_tgt_len):
     model = build_transformer(vocab_src_len, vocab_tgt_len, config["seq_len"], config["seq_len"], embed_dim=config['d_model'])
     return model
 
+def greedy_decode(model, src, src_mask, src_tokenizer, tgt_tokenizer, max_len, device):
+    """
+    Performs greedy decoding for a sequence-to-sequence model.
+
+    This function takes an input sequence, processes it through the model, and attempts to 
+    generate the target sequence one token at a time. Decoding is performed greedily, meaning 
+    at each step, it chooses the token with the highest probability from the model's output.
+
+    Args:
+        model: Transformer model, with `encode` and `decode` methods.
+        src (torch.Tensor): The input tensor for the source sequence of shape [batch_size, src_seq_len].
+        src_mask (torch.Tensor): The mask tensor for the source sequence of shape [batch_size, 1, 1, src_seq_len].
+        src_tokenizer (Tokenizer): The tokenizer used for the source language.
+        tgt_tokenizer (Tokenizer): The tokenizer used for the target language.
+        max_len (int): The maximum length of the generated sequence.
+        device: The device on which the tensors should be processed. 
+
+    Returns:
+        torch.Tensor: The tensor containing the token IDs of the generated sequence, of shape 
+                      [tgt_seq_len]. The sequence starts with the SOS token and ends with the 
+                      EOS token or when `max_len` is reached.
+
+    The function continues to generate tokens until the EOS token is generated or the length 
+    of the generated sequence reaches `max_len`. 
+    """
+    sos_idx = tgt_tokenizer.token_to_id('[SOS]')
+    eos_idx = tgt_tokenizer.token_to_id('[EOS]')
+
+    # Precompute the encoder output, and reuse it for every step
+    encoder_output = model.encode(src, src_mask)
+
+    # Initialize the decoder input with the SOS token
+    decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(src).to(device)
+    while True:
+        if decoder_input.size(1) == max_len:
+            break
+
+        # Build mask for target
+        decoder_mask = causal_mask(decoder_input.size(1)).type_as(src_mask).to(device)
+
+        # Calculate the output
+        out = model.decode(encoder_output, src_mask, decoder_input, decoder_mask)
+
+        # Get next token
+        prob = model.project(out[:, -1])
+        _, next_word = torch.max(prob, dim=1)
+        decoder_input = torch.cat(
+            [decoder_input, torch.empty(1, 1).fill_(next_word.item()).type_as(src).to(device)],
+            dim=1
+        )
+
+        if next_word == eos_idx:
+            break
+    return decoder_input.squeeze(0)
+
