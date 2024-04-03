@@ -330,7 +330,7 @@ def train_model(config):
             label = batch['label'].to(device)
 
             encoder_output = model.encode(encoder_input, encoder_mask) # Shape: [batch_size, seq_len, embed_dim]
-            decoder_output = model.decode(encoder_input, encoder_mask, decoder_input, decoder_mask) # Shape: [batch_size, seq_len, embed_dim]
+            decoder_output = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask) # Shape: [batch_size, seq_len, embed_dim]
             proj_output = model.project(decoder_output) # Shape: [batch_size, seq_len, vocab_size]
 
             loss = loss_fn(proj_output.view(-1, tokenizer_tgt.get_vocab_size()), label.view(-1))

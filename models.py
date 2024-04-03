@@ -67,7 +67,7 @@ class FeedForwardBlock(nn.Module):
 
 
 class InputEmbeddings(nn.Module):
-    def __init__(self, vocab_size: int, embed_dim: int):
+    def __init__(self, embed_dim: int, vocab_size: int):
         """
         Args:
             vocab_size: The vocabulary size.
@@ -129,7 +129,7 @@ class PositionalEncoding(nn.Module):
             Tensor with positional embeddings added to the original embedding.
         """
         # Add positional encoding to the input tensor
-        seq_len = x.size(1)
+        seq_len = x.shape[1]
         x = x + (self.pe[:, :seq_len, :]).requires_grad_(False) # Shape: [batch_size, seq_len, embed_dim]
 
         return self.dropout(x)
