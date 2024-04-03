@@ -91,7 +91,7 @@ class InputEmbeddings(nn.Module):
     
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, seq_len: int, embed_dim: int, dropout: float):
+    def __init__(self, embed_dim: int, seq_len: int, dropout: float):
         """
         Args:
             seq_len: The maximum length of the input sequences.
