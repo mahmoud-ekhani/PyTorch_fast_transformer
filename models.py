@@ -256,6 +256,7 @@ class EncoderBlock(nn.Module):
             feed_forward_block: The feed-forward network.
             dropout: The dropout rate.
         """
+        super(EncoderBlock, self).__init__()
         self.self_attention_block = self_attention_block
         self.feed_forward_block = feed_forward_block
         self.residual_connections = nn.ModuleList([
@@ -325,6 +326,7 @@ class DecoderBlock(nn.Module):
             feed_forward_block: The feed-forward block of the decoder.
             dropout: The dropout rate.
         """
+        super(DecoderBlock, self).__init__()
         self.self_attention_block = self_attention_block
         self.cross_attention_block = cross_attention_block
         self.feed_forward_block = feed_forward_block
@@ -360,7 +362,7 @@ class DecoderBlock(nn.Module):
         
     
 class Decoder(nn.Module):
-    def __init__(self, embed_dim: int, layers: nn.ModluleList):
+    def __init__(self, embed_dim: int, layers: nn.ModuleList):
         """
         Args:
             embed_dim: The number of features in the input embeddings.
