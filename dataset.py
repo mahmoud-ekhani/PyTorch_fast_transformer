@@ -3,9 +3,19 @@ import torch.nn as nn
 from torch.utils.data import Dataset
 
 class BilingualDataset(Dataset):
-
     def __init__(self, ds, tokenizer_src, tokenizer_tgt, src_lang, tgt_lang, seq_len):
-        super().__init__()
+        """
+        A dataset class for handling bilingual text data.
+
+        Args:
+            ds: A dataset containing pairs of translated sentences in different languages.
+            tokenizer_src (Tokenizer): Source language tokenizer.
+            tokenizer_tgt (Tokenizer): Target language tokenizer.
+            src_lang (str): Source language. 
+            tgt_lang (str): Target language.
+            seq_len (int): The fixed sequence length to which all sentences will be padded or truncated.
+        """
+        super(BilingualDataset, self).__init__()
         self.seq_len = seq_len
 
         self.ds = ds
@@ -18,10 +28,28 @@ class BilingualDataset(Dataset):
         self.eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
         self.pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Returns:
+            int: The size of the dataset.
+        """
         return len(self.ds)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int):
+        """
+        Retrieves the item at the specified index in the dataset.
+
+        This method tokenizes the source and target sentences, applies padding
+        to match the specified sequence length. It returns a dictionary containing
+        the input data and labels required for model training.
+
+        Args:
+            idx: The index of the item to retrieve.
+
+        Returns:
+            dict: A dictionary containing the tokenized and processed source and target
+            sentences along their respective masks.
+        """
         src_target_pair = self.ds[idx]
         src_text = src_target_pair['translation'][self.src_lang]
         tgt_text = src_target_pair['translation'][self.tgt_lang]
