@@ -72,7 +72,6 @@ def get_or_build_tokenizer(config, ds, lang):
     
     return tokenizer
 
-
 def get_ds(config):
     """
     Loads a dataset for the specified language pair, splits it into 
@@ -120,4 +119,8 @@ def get_ds(config):
     val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
 
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
+
+def get_model(config, vocab_src_len, vocab_tgt_len):
+    model = build_transformer(vocab_src_len, vocab_tgt_len, config["seq_len"], config["seq_len"], embed_dim=config['d_model'])
+    return model
 
