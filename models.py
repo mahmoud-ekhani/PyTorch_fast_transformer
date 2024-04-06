@@ -223,22 +223,20 @@ class MultiHeadAttentionBlock(nn.Module):
         Returns:
             Output of the multi-head attention mechanism.
         """
-        batch_size, seq_len, _ = query.size()
-
         query = self.w_q(query)
         key = self.w_k(key)
         value = self.w_v(value)
 
         # Reshape and transpose for multi-head attention
-        query = query.view(batch_size, seq_len, self.n_heads, self.embed_dim_h).transpose(1, 2)
-        key = key.view(batch_size, seq_len, self.n_heads, self.embed_dim_h).transpose(1, 2)
-        value = value.view(batch_size, seq_len, self.n_heads, self.embed_dim_h).transpose(1, 2)
+        query = query.view(query.shape[0], query.shape[1], self.n_heads, self.embed_dim_h).transpose(1, 2)
+        key = key.view(key.shape[0], key.shape[1], self.n_heads, self.embed_dim_h).transpose(1, 2)
+        value = value.view(value.shape[0], value.shape[1], self.n_heads, self.embed_dim_h).transpose(1, 2)
 
         # Calculate attention
         x, self.attention_scores = MultiHeadAttentionBlock.attention(query, key, value, mask, self.dropout)
 
         # Concatenate and linear transformation
-        x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.n_heads * self.embed_dim_h)
+        x = x.transpose(1, 2).contiguous().view(x.shape[0], -1, self.n_heads * self.embed_dim_h)
         out = self.w_o(x)
         return out
 
