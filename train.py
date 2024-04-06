@@ -1,4 +1,6 @@
 import os
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+
 import warnings
 from pathlib import Path
 
@@ -173,7 +175,7 @@ def greedy_decode(model, src, src_mask, src_tokenizer, tgt_tokenizer, max_len, d
         prob = model.project(out[:, -1])
         _, next_word = torch.max(prob, dim=1)
         decoder_input = torch.cat(
-            [decoder_input, torch.empty(1, 1).fill_(next_word.item()).type_as(src).to(device)],
+            [decoder_input, torch.empty(1, 1).type_as(src).fill_(next_word.item()).to(device)],
             dim=1
         )
 
@@ -182,7 +184,7 @@ def greedy_decode(model, src, src_mask, src_tokenizer, tgt_tokenizer, max_len, d
     return decoder_input.squeeze(0)
 
 def run_validate(model, validation_ds, tokenizer_src, tokenizer_tgt, max_len, device, print_msg, 
-                 global_step, writer, num_examples=2, console_width=80):
+                 global_step, writer, num_examples=2):
     """
     Runs the validation process for the given model on a validation dataset.
 
@@ -206,6 +208,7 @@ def run_validate(model, validation_ds, tokenizer_src, tokenizer_tgt, max_len, de
     model.eval()
     count = 0
     source_texts, expected, predicted = [], [], []
+    console_width=80
 
     with torch.no_grad():
         for batch in validation_ds:
